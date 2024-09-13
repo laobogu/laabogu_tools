@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.js"> </script>
+<title>Survey Chart Generator</title>
+<style>
+    /* Optional: Add some basic styling */
+    body {
+        font-family: Arial, sans-serif;
+    }
+    #mainContent {
+        display: none;
+    }
+    .indent {
+        margin-left: 15px;
+    }
+
+    .table th,
+    .table td {
+        padding: 8px; /* Add padding to table cells */
+    }
+</style>
+
+</head>
+<body>
+    <div class="container mt-3">
+        <h2>Upload CSV File</h2>
+        <input type="file" id="fileInput" class="form-control">
+
+        <div class="container mt-3">
+            <label for="startDate">Start Date:</label>
+            <input type="date" id="startDate" name="startDate">
+            <label for="endDate">End Date:</label>
+            <input type="date" id="endDate" name="endDate">
+        </div>
+
+        <button onclick="handleQ1(); handleQ2(); handleQ4(); handleOther(); handleQ5(); Show();" class="btn btn-primary mt-2">Submit</button>
+    </div>
+
+    <main id="mainContent">
+
+        <h2 class="indent">Question 1: How easy was it for you to complete the New Jersey application for unemployment insurance?</h2>
+        <div class="container mt-3">
+            <table id="dataTable1" class="table table-bordered">
+                <!-- Table will be populated dynamically -->
+            </table>
+            <br>
+            <canvas id="myChart1" style="width:100%;max-width:600px"></canvas>
+        </div>
+
+        <h2 class="indent">Question 2: How would you rate your experience with the following items?</h2>
+        <div class="container mt-3">
+            <table id="dataTable2" class="table table-bordered">
+                <!-- Table will be populated dynamically -->
+            </table>
+            <br>
+            <canvas id="myChart2" style="width:100%;max-width:600px"></canvas>
+        </div>       
+
+        <h2 class="indent">Question 4: During the IDme process, what challenges, if any, did you encounter? (Select all that apply)</h2>
+        <div class="container mt-3">
+            <table id="dataTable4" class="table table-bordered">
+                <!-- Table will be populated dynamically -->
+            </table>
+            <br>
+            <canvas id="myChart4" style="width:100%;max-width:600px"></canvas>
+        </div>
+
+        <div class="container mt-3">
+            <button class="btn btn-info" type="button" id="toggleBtnOther">
+                View "Other" Responses
+            </button>
+            <div class ="collapse" id="otherTable">
+                <table id="dataTableOther" class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Other Challenges</th>
+                        </tr>
+                    </thead>
+                    <tbody id="otherChallengesBody">
+                        <!-- Table body will be populated dynamically -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <script>
+            const toggleBtnOther = document.getElementById('toggleBtnOther');
+            const otherTable = document.getElementById('otherTable');
+        
+            toggleBtnOther.addEventListener('click', function () {
+                if (otherTable.classList.contains('show')) {
+                    otherTable.classList.remove('show');
+                    toggleBtnOther.setAttribute('aria-expanded', 'false');
+                } else {
+                    otherTable.classList.add('show');
+                    toggleBtnOther.setAttribute('aria-expanded', 'true');
+                }
+        });
+        </script>
+
+        <h2 class="indent">Question 5: How important is certifying for unemployment insurance each week?</h2>
+
+        <div class="container mt-3">
+            <table id="dataTable5" class="table table-bordered">
+                <!-- Table will be populated dynamically -->
+            </table>
+            <br>
+            <canvas id="myChart5" style="width:100%;max-width:600px"></canvas>
+        </div>
+    </main>
+    
+    <script>
+        function Show() {
+            mainContent.style.display = 'block';
+        }
+    </script>
+
+<script>
+    function handleQ1() {
+        clearChart1();
+        const fileInput = document.getElementById('fileInput');
+        const file = fileInput.files[0];
+        const startDateInput = document.getElementById('startDate').value;
+        const endDateInput = document.getElementById('endDate').value;
+    
+        Papa.parse(file, {
+            header: true,
+            complete: function(results) {
+                displayPercentageAnswersQ1(results.data, startDateInput, endDateInput);
+            }
+        });
+    }
+    
+    function displayPercentageAnswersQ1(data, startDateInput, endDateInput) {
+        let tableHTML = '<thead><tr>';
+        tableHTML += '<th>Date Range</th>';
+        tableHTML += '<th>Very easy (%)</th>';
+        tableHTML += '<th>Easy (%)</th>';
+        tableHTML += '<th>Neither easy nor hard (%)</th>';
+        tableHTML += '<th>Hard (%)</th>';
+        tableHTML += '<th>Very hard (%)</th>';
+        tableHTML += '</tr></thead><tbody>';
+    
+        // Extract earliest and latest dates from the dataset
+        const earliestDate = new Date(data[0]["Start time"]);
+        const latestDate = new Date(data[data.length - 2]["Start time"]);
+    
+        let totalResponses = 0;
+        const difficultyCounts = {
+            very_easy: 0,
+            easy: 0,
+            neither_easy_or_hard: 0,
+            hard: 0,
+            very_hard: 0
+        };
+    
+        data.forEach(function(row) {
+            const date = new Date(row["Start time"]);
+            // Check if the date is within the selected range
+            if ((!startDateInput || date >= new Date(startDateInput)) && (!endDateInput || date <= new Date(endDateInput))) {
+                const difficulty = row["How easy was it for you to complete the New Jersey application for unemployment insurance? "] || row["How easy was it for you to complete the New Jersey Application for Unemployment Benefits? "];
+                if (difficulty) {
+                    totalResponses++;
+                    switch (difficulty.toLowerCase()) {
+                        case 'very easy':
+                            difficultyCounts.very_easy++;
+                            break;
+                        case 'easy':
+                            difficultyCounts.easy++;
+                            break;
+                        case 'neither easy or hard':
+                            difficultyCounts.neither_easy_or_hard++;
+                            break;
+                        case 'neither easy nor hard':
+                        difficultyCounts.neither_easy_or_hard++;
+                        break;
+                        case 'hard':
+                            difficultyCounts.hard++;
+                            break;
+                        case 'very hard':
+                            difficultyCounts.very_hard++;
+                            break;
+                        default:
+                            break;
+                    }
+                }
+            }
+        });
+    
+        const percentageData = {};
+        for (const [key, value] of Object.entries(difficultyCounts)) {
+            percentageData[key] = totalResponses ? ((value / totalResponses) * 100).toFixed(2) : 0;
+        }
+    
+        // Format earliest and latest dates
+        const earliestDateString = formatDate(earliestDate);
+        const latestDateString = formatDate(latestDate);
+    
+        const dateRange = startDateInput && endDateInput ? `${startDateInput} - ${endDateInput}` : `${earliestDateString} - ${latestDateString}`;
+    
+        tableHTML += `<tr><td>${dateRange}</td>`;
+        tableHTML += `<td>${percentageData.very_easy}%</td>`;
+        tableHTML += `<td>${percentageData.easy}%</td>`;
+        tableHTML += `<td>${percentageData.neither_easy_or_hard}%</td>`;
+        tableHTML += `<td>${percentageData.hard}%</td>`;
+        tableHTML += `<td>${percentageData.very_hard}%</td></tr>`;
+    
+        tableHTML += '</tbody>';
+    
+        document.getElementById('dataTable1').innerHTML = tableHTML;
+    
+        var q1Data = [percentageData.very_easy, percentageData.easy, percentageData.neither_easy_or_hard, percentageData.hard, percentageData.very_hard]
+        createChart1(q1Data);
+    }
+    
+    function clearChart1() {
+        if (myChart1 && typeof myChart1.destroy === 'function') {
+                    myChart1.destroy(); // Destroy existing chart if it exists
+            }
+    }
+    
+    function formatDate(date) {
+        const year = date.getFullYear();
+        let month = date.getMonth() + 1;
+        if (month < 10) {
+            month = '0' + month;
+        }
+        let day = date.getDate();
+        if (day < 10) {
+            day = '0' + day;
+        }
+        return `${year}-${month}-${day}`;
+    }
+    
+    function createChart1(q1Data) {
+                var optionsArray = ["Very Easy", "Easy", "Neither easy or hard", "Hard", "Very hard"];
+                var barColors = ["blue", "green", "yellow", "orange", "red"]; 
+        
+                var ctx = document.getElementById('myChart1').getContext('2d');
+                myChart1 = new Chart(ctx, {
+                    type: "bar",
+                    data: {
+                        labels: optionsArray,
+                        datasets: [{
+                            backgroundColor: barColors,
+                            data: q1Data
+                        }]
+                    },
+                    options: {
+                        legend: { display: false },
+                        title: {
+                            display: true,
+                            text: "How easy was it for you to complete the New Jersey application for unemployment insurance? "
+                        },
+                        scales: {
+                            xAxes: [{ scaleLabel: { display:true, labelString: 'Option' } }],    
+                            yAxes: [{
+                                scaleLabel: { display:true, labelString: 'Percentage' }
+                            }],
+                        }
+                    }
+                });
+            }
+    </script>
+
+<script>
+    function handleQ2() {
+        const fileInput = document.getElementById('fileInput');
+        const file = fileInput.files[0];
+        const startDateInput = document.getElementById('startDate').value;
+        const endDateInput = document.getElementById('endDate').value;
+    
+        Papa.parse(file, {
+            header: true,
+            complete: function(results) {
+                displayPercentageAnswersQ2(results.data, startDateInput, endDateInput);
+            }
+        });
+    }
+    
+    function displayPercentageAnswersQ2(data, startDateInput, endDateInput) {
+        let tableHTML = '<thead><tr>';
+        tableHTML += '<th>Item</th>';
+        tableHTML += '<th>Date Range</th>';
+        tableHTML += '<th>Very easy (%)</th>';
+        tableHTML += '<th>Easy (%)</th>';
+        tableHTML += '<th>Neither easy or hard (%)</th>';
+        tableHTML += '<th>Hard (%)</th>';
+        tableHTML += '<th>Very hard (%)</th>';
+        tableHTML += '</tr></thead><tbody>';
+    
+        const questions = [
+            "Finding the application",
+            "Creating an account",
+            "Saving and resuming the application",
+            "Resetting my password",
+            "Explaining why my job ended",
+            "Adding employer(s) details",
+            "Updating personal/contact information",
+            "Figuring out next steps after claim submission"
+        ];
+    
+        const difficultyCounts = questions.map(question => ({
+            very_easy: 0,
+            easy: 0,
+            neither_easy_or_hard: 0,
+            hard: 0,
+            very_hard: 0
+        }));
+    
+        data.forEach(function(row) {
+            const date = new Date(row["Start time"]);
+            // Check if the date is within the selected range
+            if ((!startDateInput || date >= new Date(startDateInput)) && (!endDateInput || date <= new Date(endDateInput))) {
+                questions.forEach((question, index) => {
+                    const difficulty = row[question];
+                    if (difficulty) {
+                        switch (difficulty.toLowerCase()) {
+                            case 'very easy':
+                                difficultyCounts[index].very_easy++;
+                                break;
+                            case 'easy':
+                                difficultyCounts[index].easy++;
+                                break;
+                            case 'neither easy or hard':
+                                difficultyCounts[index].neither_easy_or_hard++;
+                                break;
+                            case 'neither easy nor hard':
+                                difficultyCounts[index].neither_easy_or_hard++;
+                                break;
+                            case 'hard':
+                                difficultyCounts[index].hard++;
+                                break;
+                            case 'very hard':
+                                difficultyCounts[index].very_hard++;
+                                break;
+                            default:
+                                break;
+                        }
+                    }
+                });
+            }
+        });
+    
+        const earliestDate = new Date(data[0]["Start time"]);
+        const latestDate = new Date(data[data.length - 2]["Start time"]);
+        const earliestDateString = formatDate(earliestDate);
+        const latestDateString = formatDate(latestDate);
+        const dateRange = startDateInput && endDateInput ? `${startDateInput} - ${endDateInput}` : `${earliestDateString} - ${latestDateString}`;
+    
+        questions.forEach((question, index) => {
+            const totalCount = Object.values(difficultyCounts[index]).reduce((acc, val) => acc + val, 0);
+            tableHTML += `<tr><td>${question}</td><td>${dateRange}</td>`;
+            tableHTML += `<td>${((difficultyCounts[index].very_easy / totalCount) * 100).toFixed(2)}%</td>`;
+            tableHTML += `<td>${((difficultyCounts[index].easy / totalCount) * 100).toFixed(2)}%</td>`;
+            tableHTML += `<td>${((difficultyCounts[index].neither_easy_or_hard / totalCount) * 100).toFixed(2)}%</td>`;
+            tableHTML += `<td>${((difficultyCounts[index].hard / totalCount) * 100).toFixed(2)}%</td>`;
+            tableHTML += `<td>${((difficultyCounts[index].very_hard / totalCount) * 100).toFixed(2)}%</td></tr>`;
+        });
+    
+        tableHTML += '</tbody>';
+        document.getElementById('dataTable2').innerHTML = tableHTML;
+    
+        createChart2(questions, difficultyCounts);
+    }
+    
+    function formatDate(date) {
+        const year = date.getFullYear();
+        let month = date.getMonth() + 1;
+        if (month < 10) {
+            month = '0' + month;
+        }
+        let day = date.getDate();
+        if (day < 10) {
+            day = '0' + day;
+        }
+        return `${year}-${month}-${day}`;
+    }
+    
+    function createChart2(questions, difficultyCounts) {
+        var optionsArray = ["Very Easy", "Easy", "Neither easy or hard", "Hard", "Very hard"];
+        var barColors = ["blue", "green", "yellow", "orange", "red"];
+    
+        var ctx = document.getElementById('myChart2').getContext('2d');
+        myChart2 = new Chart(ctx, {
+            type: "bar",
+            data: {
+                labels: questions,
+                datasets: optionsArray.map((option, index) => ({
+                    label: option,
+                    backgroundColor: barColors[index],
+                    data: questions.map((_, i) => {
+                        const totalCount = Object.values(difficultyCounts[i]).reduce((acc, val) => acc + val, 0);
+                        return ((difficultyCounts[i][option.toLowerCase().replace(/\s+/g, '_')] / totalCount) * 100).toFixed(2);
+                    })
+                }))
+            },
+            options: {
+                title: {
+                    display: true,
+                    text: "How would you rate your experience with the following items?"
+                },
+                scales: {
+                    xAxes: [{ stacked: true }],
+                    yAxes: [{ stacked: true }]
+                }
+            }
+        });
+    }
+    </script>
+
+<script>
+    function handleQ4() {
+        clearChart4();
+        const fileInput = document.getElementById('fileInput');
+        const file = fileInput.files[0];
+        const startDateInput = document.getElementById('startDate').value;
+        const endDateInput = document.getElementById('endDate').value;
+    
+        Papa.parse(file, {
+            header: true,
+            complete: function(results) {
+                displayPercentageAnswersQ4(results.data, startDateInput, endDateInput);
+            }
+        });
+    }
+    
+    function displayPercentageAnswersQ4(data, startDateInput, endDateInput) {
+        let tableHTML = '<thead><tr>';
+        tableHTML += '<th>Date Range</th>';
+        tableHTML += '<th>Which document(s) to use (%)</th>';
+        tableHTML += '<th>Realizing the need to complete IDme (%)</th>';
+        tableHTML += '<th>Using the IDme website or app (%)</th>';
+        tableHTML += '<th>No challenges (%)</th>';
+        tableHTML += '<th>Uploading my document(s) (%)</th>';
+        tableHTML += '<th>Next steps after finishing IDme (%)</th>';
+        tableHTML += '<th>Other (%)</th>';
+        tableHTML += '</tr></thead><tbody>';
+    
+        const earliestDate = new Date(data[0]["Start time"]);
+        const latestDate = new Date(data[data.length - 2]["Start time"]);
+        const dateRange = startDateInput && endDateInput ? `${startDateInput} - ${endDateInput}` : `${earliestDate.toLocaleDateString()} - ${latestDate.toLocaleDateString()}`;
+    
+        // Define the option names
+        const optionNames = [
+            "Which document(s) to use",
+            "Realizing the need to complete IDme",
+            "Using the IDme website or app",
+            "No challenges",
+            "Uploading my document(s)",
+            "Next steps after finishing IDme",
+            "Other"
+        ];
+    
+        // Initialize counts for each option
+        let optionCounts = {};
+        optionNames.forEach(option => {
+            optionCounts[option] = 0;
+        });
+    
+        // Count occurrences of each option
+        data.forEach(function(row) {
+            const challenges = row["During the IDme process, what challenges, if any, did you encounter? (Select all that apply)"];
+            if (challenges) {
+                const nextStepsArray = challenges.split(';');
+                nextStepsArray.forEach(option => {
+                    const trimmedOption = option.trim();
+                    if (optionNames.includes(trimmedOption)) {
+                        optionCounts[trimmedOption]++;
+                    } else if (trimmedOption !== "") {
+                        optionCounts["Other"]++;
+                    }
+                });
+            }
+        });
+    
+        // Calculate total number of responses
+        const totalResponses = data.length;
+    
+        // Generate table rows with percentages
+        tableHTML += '<tr>';
+        tableHTML += `<td>${dateRange}</td>`;
+        optionNames.forEach(option => {
+            const percentage = ((optionCounts[option] / totalResponses) * 100 || 0).toFixed(2);
+            tableHTML += `<td>${percentage}%</td>`;
+        });
+        tableHTML += '</tr>';
+    
+        tableHTML += '</tbody>';
+    
+        document.getElementById('dataTable4').innerHTML = tableHTML;
+    
+        // Create chart with option counts
+        createChart4(optionCounts);
+    }
+    
+    function clearChart4() {
+        if (myChart4 && typeof myChart4.destroy === 'function') {
+            myChart4.destroy(); // Destroy existing chart if it exists
+        }
+    }
+    
+    function createChart4(optionCounts) {
+        var optionsArray = ["Which document(s) to use", "Realizing the need to complete IDme", "Using the IDme website or app", "No challenges", "Uploading my document(s)", "Next steps after finishing IDme", "Other"];
+        var barColors = ["red", "green","blue","orange","brown", "pink", "purple"];
+    
+        var ctx = document.getElementById('myChart4').getContext('2d');
+        myChart4 = new Chart(ctx, {
+            type: "bar",
+            data: {
+                labels: optionsArray,
+                datasets: [{
+                    backgroundColor: barColors,
+                    data: optionsArray.map(option => parseFloat(document.querySelector(`#dataTable4 td:nth-child(${optionsArray.indexOf(option) + 2})`).innerText))
+                }]
+            },
+            options: {
+                legend: { display: false },
+                title: {
+                    display: true,
+                    text: "During the IDme process, what challenges, if any, did you encounter?"
+                },
+                scales: {
+                    xAxes: [{ scaleLabel: { display: true, labelString: 'Option' } }],
+                    yAxes: [{
+                        scaleLabel: { display: true, labelString: 'Percentage' }
+                    }],
+                }
+            }
+        });
+    }
+    </script>
+
+<script>
+    function handleOther() {
+        const fileInput = document.getElementById('fileInput');
+        const file = fileInput.files[0];
+    
+        const startDateInput = document.getElementById('startDate').value;
+        const endDateInput = document.getElementById('endDate').value;
+    
+        let startDate = new Date(startDateInput);
+        let endDate = new Date(endDateInput);
+    
+        if (!startDateInput || !endDateInput) {
+            // If no dates are selected, assume all available dates
+            startDate = null;
+            endDate = null;
+        }
+        
+        Papa.parse(file, {
+            header: true,
+            complete: function(results) {
+                const filteredData = filterDataByDate(results.data, startDate, endDate);
+                displayOtherChallenges(filteredData);
+            }
+        });
+    }
+    
+    function filterDataByDate(data, startDate, endDate) {
+        if (!startDate && !endDate) {
+            // No date range specified, return all data
+            return data;
+        }
+    
+        return data.filter(row => {
+            const startTime = new Date(row["Start time"]);
+            if (startTime.toString() === 'Invalid Date') {
+                return false; // Skip rows with invalid date format
+            }
+            return (!startDate || startTime >= startDate) && (!endDate || startTime <= endDate);
+        });
+    }
+    
+    function displayOtherChallenges(data) {
+        const excludedValues = ["No challenges", "Which document(s) to use", "Realizing the need to complete IDme", "Using the IDme website or app", "Uploading my document(s)", "Next steps after finishing IDme"];
+    
+        const otherChallenges = data.map(row => {
+            const challenges = row["During the IDme process, what challenges, if any, did you encounter? (Select all that apply)"];
+            if (challenges) {
+                const challengesText = challenges.split(";")
+                                                  .map(item => item.trim())
+                                                  .filter(item => !excludedValues.includes(item))
+                                                  .join(";")
+                                                  .replace(/;+$/, "") // Remove trailing semicolons
+                                                  .trim();
+                if (challengesText) {
+                    return { otherChallengesText: challengesText };
+                }
+            }
+            return null;
+        }).filter(Boolean);
+    
+        const tableBody = document.getElementById('otherChallengesBody');
+        tableBody.innerHTML = '';
+    
+        otherChallenges.forEach(row => {
+            const otherChallengesText = row.otherChallengesText;
+            
+            const newRow = document.createElement('tr');
+            newRow.innerHTML = `
+                <td>${otherChallengesText}</td>
+            `;
+            tableBody.appendChild(newRow);
+        });
+    }
+    </script>    
+
+<script>
+    function handleQ5() {
+        clearChart5();
+        const fileInput = document.getElementById('fileInput');
+        const file = fileInput.files[0];
+        const startDateInput = document.getElementById('startDate').value;
+        const endDateInput = document.getElementById('endDate').value;
+    
+        Papa.parse(file, {
+            header: true,
+            complete: function(results) {
+                displayPercentageAnswersQ5(results.data, startDateInput, endDateInput);
+            }
+        });
+    }
+    
+    function displayPercentageAnswersQ5(data, startDateInput, endDateInput) {
+        let tableHTML = '<thead><tr>';
+        tableHTML += '<th>Date Range</th>';
+        tableHTML += '<th>Extremely important (%)</th>';
+        tableHTML += '<th>Very important (%)</th>';
+        tableHTML += '<th>Important (%)</th>';
+        tableHTML += '<th>Somewhat important (%)</th>';
+        tableHTML += '<th>Not at all important (%)</th>';
+        tableHTML += '</tr></thead><tbody>';
+    
+        // Extract earliest and latest dates from the dataset
+        const earliestDate = new Date(data[0]["Start time"]);
+        const latestDate = new Date(data[data.length - 2]["Start time"]);
+    
+        let q5totalResponses = 0;
+        const importanceCounts = {
+            extremely_important: 0,
+            very_important: 0,
+            important: 0,
+            somewhat_important: 0,
+            not_at_all_important: 0
+        };
+    
+        data.forEach(function(row) {
+            const date = new Date(row["Start time"]);
+            // Check if the date is within the selected range
+            if ((!startDateInput || date >= new Date(startDateInput)) && (!endDateInput || date <= new Date(endDateInput))) {
+                const importance = row["How important is certifying for unemployment insurance each week?"];
+                if (importance) {
+                    q5totalResponses++;
+                    switch (importance.toLowerCase()) {
+                        case 'extremely important':
+                            importanceCounts.extremely_important++;
+                            break;
+                        case 'very important':
+                            importanceCounts.very_important++;
+                            break;
+                        case 'important':
+                            importanceCounts.important++;
+                            break;
+                        case 'somewhat important':
+                            importanceCounts.somewhat_important++;
+                            break;
+                        case 'not at all important':
+                            importanceCounts.not_at_all_important++;
+                            break;
+                        default:
+                            break;
+                    }
+                }
+            }
+        });
+    
+        const q5percentageData = {};
+        for (const [key, value] of Object.entries(importanceCounts)) {
+            q5percentageData[key] = q5totalResponses ? ((value / q5totalResponses) * 100).toFixed(2) : 0;
+        }
+    
+        // Format earliest and latest dates
+        const earliestDateString = q5formatDate(earliestDate);
+        const latestDateString = q5formatDate(latestDate);
+    
+        const dateRange = startDateInput && endDateInput ? `${startDateInput} - ${endDateInput}` : `${earliestDateString} - ${latestDateString}`;
+    
+        tableHTML += `<tr><td>${dateRange}</td>`;
+        tableHTML += `<td>${q5percentageData.extremely_important}%</td>`;
+        tableHTML += `<td>${q5percentageData.very_important}%</td>`;
+        tableHTML += `<td>${q5percentageData.important}%</td>`;
+        tableHTML += `<td>${q5percentageData.somewhat_important}%</td>`;
+        tableHTML += `<td>${q5percentageData.not_at_all_important}%</td></tr>`;
+    
+        tableHTML += '</tbody>';
+    
+        document.getElementById('dataTable5').innerHTML = tableHTML;
+    
+        var q5Data = [q5percentageData.extremely_important, q5percentageData.very_important, q5percentageData.important, q5percentageData.somewhat_important, q5percentageData.not_at_all_important];
+        createChart5(q5Data);
+    }
+    
+    function clearChart5() {
+        if (myChart5 && typeof myChart5.destroy === 'function') {
+            myChart5.destroy(); // Destroy existing chart if it exists
+        }
+    }
+    
+    function q5formatDate(date) {
+        const year = date.getFullYear();
+        let month = date.getMonth() + 1;
+        if (month < 10) {
+            month = '0' + month;
+        }
+        let day = date.getDate();
+        if (day < 10) {
+            day = '0' + day;
+        }
+        return `${year}-${month}-${day}`;
+    }
+    
+    function createChart5(q5Data) {
+        var optionsArray = ["Extremely Important", "Very Important", "Important", "Somewhat Important", "Not at all Important"];
+        var barColors = ["blue", "green", "yellow", "orange", "red"];
+    
+        var ctx = document.getElementById('myChart5').getContext('2d');
+        myChart5 = new Chart(ctx, {
+            type: "bar",
+            data: {
+                labels: optionsArray,
+                datasets: [{
+                    backgroundColor: barColors,
+                    data: q5Data
+                }]
+            },
+            options: {
+                legend: { display: false },
+                title: {
+                    display: true,
+                    text: "How important is certifying for unemployment insurance each week?"
+                },
+                scales: {
+                    xAxes: [{ scaleLabel: { display: true, labelString: 'Option' } }],
+                    yAxes: [{
+                        scaleLabel: { display: true, labelString: 'Percentage' }
+                    }],
+                }
+            }
+        });
+    }
+    </script>
+</body>
+</html>
